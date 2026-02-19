@@ -5,6 +5,7 @@ from flask import Flask, render_template, jsonify
 from functools import lru_cache
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
 
 RESOURCES = {
     'oil': {'name': 'Нефть', 'unit': '$/баррель'},
