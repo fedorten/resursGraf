@@ -1,16 +1,10 @@
 import os
-import json
 import datetime
 import requests
-from flask import Flask, render_template, jsonify, request
-from dotenv import load_dotenv
-
-load_dotenv()
+from flask import Flask, render_template, jsonify
+from functools import lru_cache
 
 app = Flask(__name__)
-
-DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
-os.makedirs(DATA_DIR, exist_ok=True)
 
 RESOURCES = {
     'oil': {'name': 'Нефть', 'unit': '$/баррель'},
@@ -24,60 +18,18 @@ RESOURCES = {
     'rub': {'name': 'Рубль', 'unit': '₽/USD'}
 }
 
-def get_data_file_path(resource):
-    return os.path.join(DATA_DIR, f'{resource}.json')
+SYMBOLS = {
+    'oil': 'CL=F',
+    'gas': 'NG=F',
+    'gasoline': 'RB=F',
+    'diesel': 'HO=F',
+    'gold': 'GC=F',
+    'silver': 'SI=F',
+    'copper': 'HG=F'
+}
 
-def load_history(resource):
-    filepath = get_data_file_path(resource)
-    if os.path.exists(filepath):
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    return []
-
-def save_history(resource, history):
-    filepath = get_data_file_path(resource)
-    with open(filepath, 'w') as f:
-        json.dump(history, f)
-
-def fetch_rub_history():
-    try:
-        url = 'https://api.frankfurter.dev/v1/2003-01-01..2026-02-19?base=USD&symbol=RUB'
-        resp = requests.get(url, timeout=30)
-        data = resp.json()
-        if 'rates' in data:
-            result = []
-            for date, rates in data['rates'].items():
-                result.append({'date': date, 'price': float(rates['RUB'])})
-            return sorted(result, key=lambda x: x['date'])
-        return []
-    except Exception as e:
-        print(f"Error fetching rub: {e}")
-        return []
-
-def fetch_metal_price(metal):
-    try:
-        url = f'https://api.metalpriceapi.com/v1/latest?api_key=f demo&unit=toz'
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        if 'prices' in data:
-            metal_map = {'gold': 'XAU', 'silver': 'XAG', 'copper': 'XCU'}
-            if metal in metal_map and metal_map[metal] in data['prices']:
-                return data['prices'][metal_map[metal]]
-        return None
-    except:
-        pass
-    
-    try:
-        url = 'https://api.exchangerate.host/latest?base=USD'
-        resp = requests.get(url, timeout=10)
-        data = resp.json()
-        return None
-    except:
-        pass
-    
-    return None
-
-def fetch_commodity_history(symbol):
+@lru_cache(maxsize=1)
+def get_cached_history(symbol):
     try:
         url = f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5y&interval=1wk'
         resp = requests.get(url, timeout=15)
@@ -97,25 +49,21 @@ def fetch_commodity_history(symbol):
         print(f"Error fetching {symbol}: {e}")
         return []
 
-SYMBOLS = {
-    'oil': 'CL=F',
-    'gas': 'NG=F',
-    'gasoline': 'RB=F',
-    'diesel': 'HO=F',
-    'gold': 'GC=F',
-    'silver': 'SI=F',
-    'copper': 'HG=F'
-}
-
-def fetch_all_data():
-    rub_history = fetch_rub_history()
-    if rub_history:
-        save_history('rub', rub_history)
-    
-    for resource, symbol in SYMBOLS.items():
-        history = fetch_commodity_history(symbol)
-        if history:
-            save_history(resource, history)
+@lru_cache(maxsize=1)
+def get_rub_history():
+    try:
+        url = 'https://api.frankfurter.dev/v1/2000-01-01..2026-02-19?base=USD&symbol=RUB'
+        resp = requests.get(url, timeout=30)
+        data = resp.json()
+        if 'rates' in data:
+            result = []
+            for date, rates in data['rates'].items():
+                result.append({'date': date, 'price': float(rates['RUB'])})
+            return sorted(result, key=lambda x: x['date'])
+        return []
+    except Exception as e:
+        print(f"Error fetching rub: {e}")
+        return []
 
 @app.route('/')
 def index():
@@ -126,21 +74,22 @@ def get_price(resource):
     if resource not in RESOURCES:
         return jsonify({'error': 'Resource not found'}), 404
     
-    history = load_history(resource)
-    if not history:
-        if resource == 'steel':
+    if resource == 'steel':
+        return jsonify({
+            'resource': resource,
+            'name': RESOURCES[resource]['name'],
+            'unit': RESOURCES[resource]['unit'],
+            'price': 2500,
+            'date': datetime.date.today().isoformat()
+        })
+    
+    if resource == 'rub':
+        history = get_rub_history()
+    else:
+        symbol = SYMBOLS.get(resource)
+        if not symbol:
             return jsonify({'error': 'No data'}), 404
-        if resource == 'rub':
-            rub_history = fetch_rub_history()
-            if rub_history:
-                save_history('rub', rub_history)
-                history = rub_history
-        else:
-            symbol = SYMBOLS.get(resource)
-            if symbol:
-                history = fetch_commodity_history(symbol)
-                if history:
-                    save_history(resource, history)
+        history = get_cached_history(symbol)
     
     if not history:
         return jsonify({'error': 'No data'}), 404
@@ -162,19 +111,13 @@ def get_history_period(resource, period):
     if resource == 'steel':
         return jsonify([{'date': datetime.date.today().isoformat(), 'price': 2500}])
     
-    history = load_history(resource)
-    
-    if not history or len(history) == 0:
-        if resource == 'rub':
-            history = fetch_rub_history()
-            if history:
-                save_history('rub', history)
-        else:
-            symbol = SYMBOLS.get(resource)
-            if symbol:
-                history = fetch_commodity_history(symbol)
-                if history:
-                    save_history(resource, history)
+    if resource == 'rub':
+        history = get_rub_history()
+    else:
+        symbol = SYMBOLS.get(resource)
+        if not symbol:
+            return jsonify([])
+        history = get_cached_history(symbol)
     
     if not history:
         return jsonify([])
