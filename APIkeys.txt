@@ -1,0 +1,3 @@
+https://commoditypriceapi.com/ - e827d3e0-d4e5-4a86-b26d-c7191045a122
+
+curl -s https://api.frankfurter.dev/v1/latest - ключ не нужен
