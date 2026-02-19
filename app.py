@@ -44,16 +44,15 @@ def get_rub_history():
         return rub_cache
     
     try:
-        url = 'https://api.frankfurter.dev/v1/2015-01-01..2026-02-19?base=USD&symbol=RUB'
-        resp = requests.get(url, timeout=60)
+        url = 'https://open.er-api.com/v6/latest/USD'
+        resp = requests.get(url, timeout=10)
         data = resp.json()
-        if 'rates' in data:
-            result = []
-            for date, rates in data['rates'].items():
-                result.append({'date': date, 'price': float(rates['RUB'])})
-            rub_cache = sorted(result, key=lambda x: x['date'])
-            cache_time = datetime.datetime.now()
-            return rub_cache
+        if data.get('result') == 'success' and 'rates' in data:
+            rate = data['rates'].get('RUB')
+            if rate:
+                rub_cache = [{'date': datetime.date.today().isoformat(), 'price': float(rate)}]
+                cache_time = datetime.datetime.now()
+                return rub_cache
     except Exception as e:
         print(f"Error fetching rub: {e}")
     
