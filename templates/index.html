@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="button-grid">
+        {% for key, info in resources.items() %}
+        <a href="/chart/{{ key }}" class="resource-btn">
+            <span class="btn-name">{{ info.name }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

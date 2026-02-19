@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="chart-container">
+    <div class="chart-header">
+        <a href="/" class="back-btn">← Назад</a>
+        <h2>{{ resources[resource].name }}</h2>
+    </div>
+    
+    <div class="price-display">
+        <span class="current-price" id="currentPrice">Загрузка...</span>
+        <span class="price-unit">{{ resources[resource].unit }}</span>
+    </div>
+    
+    <div class="period-selector">
+        <button class="period-btn" data-period="week">Неделя</button>
+        <button class="period-btn" data-period="month">Месяц</button>
+        <button class="period-btn" data-period="3months">3 месяца</button>
+        <button class="period-btn" data-period="year">Год</button>
+        <button class="period-btn" data-period="3years">3 года</button>
+        <button class="period-btn active" data-period="all">Всё время</button>
+    </div>
+    
+    <div class="chart-wrapper">
+        <canvas id="priceChart"></canvas>
+    </div>
+    
+    <div class="change-display">
+        <span>Изменение: </span>
+        <span id="priceChange">—</span>
+    </div>
+</div>
+
+<script>
+    const resource = '{{ resource }}';
+    const resourceName = '{{ resources[resource].name }}';
+    const unit = '{{ resources[resource].unit }}';
+</script>
+{% endblock %}
