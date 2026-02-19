@@ -1,7 +1,6 @@
-import os
 import datetime
 import requests
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, make_response
 from functools import lru_cache
 
 app = Flask(__name__)
@@ -30,10 +29,27 @@ SYMBOLS = {
 }
 
 @lru_cache(maxsize=1)
-def get_cached_history(symbol):
+def get_rub_history():
     try:
-        url = f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5y&interval=1wk'
-        resp = requests.get(url, timeout=15)
+        url = 'https://api.frankfurter.dev/v1/2000-01-01..2026-02-19?base=USD&symbol=RUB'
+        resp = requests.get(url, timeout=30)
+        data = resp.json()
+        if 'rates' in data:
+            result = []
+            for date, rates in data['rates'].items():
+                result.append({'date': date, 'price': float(rates['RUB'])})
+            return sorted(result, key=lambda x: x['date'])
+        return []
+    except Exception as e:
+        print(f"Error fetching rub: {e}")
+        return []
+
+@lru_cache(maxsize=1)
+def get_commodity_history(symbol):
+    try:
+        url = f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}'
+        params = {'range': '5y', 'interval': '1wk'}
+        resp = requests.get(url, params=params, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
         data = resp.json()
         if 'chart' in data and 'result' in data['chart'] and data['chart']['result']:
             result = data['chart']['result'][0]
@@ -50,21 +66,12 @@ def get_cached_history(symbol):
         print(f"Error fetching {symbol}: {e}")
         return []
 
-@lru_cache(maxsize=1)
-def get_rub_history():
-    try:
-        url = 'https://api.frankfurter.dev/v1/2000-01-01..2026-02-19?base=USD&symbol=RUB'
-        resp = requests.get(url, timeout=30)
-        data = resp.json()
-        if 'rates' in data:
-            result = []
-            for date, rates in data['rates'].items():
-                result.append({'date': date, 'price': float(rates['RUB'])})
-            return sorted(result, key=lambda x: x['date'])
-        return []
-    except Exception as e:
-        print(f"Error fetching rub: {e}")
-        return []
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 @app.route('/')
 def index():
@@ -90,7 +97,7 @@ def get_price(resource):
         symbol = SYMBOLS.get(resource)
         if not symbol:
             return jsonify({'error': 'No data'}), 404
-        history = get_cached_history(symbol)
+        history = get_commodity_history(symbol)
     
     if not history:
         return jsonify({'error': 'No data'}), 404
@@ -118,7 +125,7 @@ def get_history_period(resource, period):
         symbol = SYMBOLS.get(resource)
         if not symbol:
             return jsonify([])
-        history = get_cached_history(symbol)
+        history = get_commodity_history(symbol)
     
     if not history:
         return jsonify([])
